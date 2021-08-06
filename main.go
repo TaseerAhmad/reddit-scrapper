@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
@@ -9,45 +10,22 @@ import (
 )
 
 type post struct {
-	comments 		 string
-	url				 string
-	title 			 string
-	source 			 string
-	domain           string
-	author           string
-	timeOfSubmission string
+	Url    	 string `json:"url"`
+	Title  	 string `json:"title"`
+	Domain   string `json:"domain"`
+	Author   string `json:"author"`
+	PostedOn string `json:"postedOn"`
 }
 
-func main() {
-	var posts []post
+var posts []post
+var requestsMade int
 
-	collector := colly.NewCollector(
+func main() {
+	c := colly.NewCollector(
 			colly.AllowedDomains("old.reddit.com"),
 			colly.Async(true))
 
-	collector.OnHTML(".top-matter", func(e *colly.HTMLElement) {
-		var post post
-		post.title = e.ChildText("a[data-event-action=title]")
-		post.domain = refineDomain(e.ChildText("span[class=domain]"))
-		post.url = e.ChildAttr("a[data-event-action=title]", "href")
-		//post.comments = e.ChildAttr("a[data-event-action=comments]", "href")
-		selector := e.DOM.Find("p")
-		if selector.HasClass("tagline") {
-			selector.Children().Each(func(i int, selection *goquery.Selection) {
-				if dateTime, exists := e.DOM.Find("time").Attr("datetime"); exists {
-					post.timeOfSubmission = dateTime
-				}
-
-				if selection.HasClass("author may-blank") {
-					post.author = selection.Contents().Text()
-				}
-			})
-		}
-
-		posts = append(posts, post)
-	})
-
-	err := collector.Limit(&colly.LimitRule{
+	err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*httpbin.*",
 		Parallelism: 1,
 		RandomDelay: 5 * time.Second,
@@ -57,21 +35,58 @@ func main() {
 		return
 	}
 
-	collector.OnRequest(func(request *colly.Request) {
+	c.OnRequest(func(request *colly.Request) {
 		fmt.Println("Visiting", request.URL.String())
 	})
 
-	err = collector.Visit("https://old.reddit.com/r/worldnews/new")
+	logCrawlerRequests(c)
+	startCrawl(c)
+
+	c.Wait()
+
+	indent, err := json.MarshalIndent(posts, "", "  ")
+	if err != nil {
+		log.Fatal(err.Error())
+		return
+	}
+	fmt.Println(string(indent))
+}
+
+func logCrawlerRequests(c *colly.Collector) {
+	c.OnRequest(func(request *colly.Request) {
+		requestsMade++
+	})
+}
+
+func refineDomain(domain string) string {
+	return domain[1: len(domain) - 1]
+}
+
+func startCrawl(collector *colly.Collector) {
+	err := collector.Visit("https://old.reddit.com/r/worldnews/new")
 	if err != nil {
 		log.Fatal("[FATAL] Visit Error: ", err.Error())
 		return
 	}
 
-	collector.Wait()
+	collector.OnHTML(".top-matter", func(e *colly.HTMLElement) {
+		var post post
+		post.Title = e.ChildText("a[data-event-action=title]")
+		post.Domain = refineDomain(e.ChildText("span[class=domain]"))
+		post.Url = e.ChildAttr("a[data-event-action=title]", "href")
+		//post.comments = e.ChildAttr("a[data-event-action=comments]", "href")
+		selector := e.DOM.Find("p")
+		if selector.HasClass("tagline") {
+			selector.Children().Each(func(i int, selection *goquery.Selection) {
+				if dateTime, exists := e.DOM.Find("time").Attr("datetime"); exists {
+					post.PostedOn = dateTime
+				}
 
-	fmt.Println(posts)
-}
-
-func refineDomain(domain string) string {
-	return domain[1: len(domain) - 1]
+				if selection.HasClass("author may-blank") {
+					post.Author = selection.Contents().Text()
+				}
+			})
+		}
+		posts = append(posts, post)
+	})
 }
