@@ -10,8 +10,8 @@ import (
 )
 
 type post struct {
-	Url    	 string `json:"url"`
-	Title  	 string `json:"title"`
+	Url      string `json:"url"`
+	Title    string `json:"title"`
 	Domain   string `json:"domain"`
 	Author   string `json:"author"`
 	PostedOn string `json:"postedOn"`
@@ -19,11 +19,13 @@ type post struct {
 
 var posts []post
 var requestsMade int
+var refreshInterval int
 
 func main() {
 	c := colly.NewCollector(
-			colly.AllowedDomains("old.reddit.com"),
-			colly.Async(true))
+		colly.AllowedDomains("old.reddit.com"),
+		colly.AllowURLRevisit(),
+		colly.Async(true))
 
 	err := c.Limit(&colly.LimitRule{
 		DomainGlob:  "*httpbin.*",
@@ -39,27 +41,34 @@ func main() {
 		fmt.Println("Visiting", request.URL.String())
 	})
 
-	logCrawlerRequests(c)
-	startCrawl(c)
+	ticker := time.NewTicker(time.Second)
 
-	c.Wait()
-
-	indent, err := json.MarshalIndent(posts, "", "  ")
-	if err != nil {
-		log.Fatal(err.Error())
-		return
-	}
-	fmt.Println(string(indent))
-}
-
-func logCrawlerRequests(c *colly.Collector) {
 	c.OnRequest(func(request *colly.Request) {
 		requestsMade++
+
+		ticker.Reset(5 * time.Second)
 	})
+
+	for {
+		select {
+		case <- ticker.C:
+			startCrawl(c)
+			c.Wait()
+
+			indent, err := json.MarshalIndent(posts, "", "  ")
+			if err != nil {
+				log.Fatal(err.Error())
+				return
+			}
+			fmt.Println(string(indent))
+			fmt.Println("TOTAL REQUESTS MADE: ", requestsMade)
+		}
+	}
+
 }
 
 func refineDomain(domain string) string {
-	return domain[1: len(domain) - 1]
+	return domain[1 : len(domain)-1]
 }
 
 func startCrawl(collector *colly.Collector) {
