@@ -8,11 +8,12 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 4 {
+	if len(os.Args) != 5 {
 		fmt.Println("Not enough arguments passed")
 		return
 	}
 	url := os.Args[3]
+	fiName := os.Args[4]
 	var keepAlive bool
 	var refreshRate int
 
@@ -28,5 +29,5 @@ func main() {
 	refreshRate = rate
 
 	scrapper.Init("old.reddit.com")
-	scrapper.Start(keepAlive, refreshRate, url)
+	scrapper.Start(keepAlive, refreshRate, url, fiName)
 }
