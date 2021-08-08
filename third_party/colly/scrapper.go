@@ -1,13 +1,13 @@
 package colly
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/gocolly/colly/v2"
 	"log"
 	"reddit-scrapper/models"
+	scrapLogger "reddit-scrapper/util"
 	"time"
 )
 
@@ -37,7 +37,7 @@ func Init(domains ...string)  {
 }
 
 // Start keepAlive when true makes the crawler to fetch the data after every defined intervals in refreshRate (seconds)
-func Start(keepAlive bool, refreshRate int, url string) {
+func Start(keepAlive bool, refreshRate int, url ,fiName string) {
 	if collector == nil {
 		log.Fatal("[FATAL] Scrapper not initialized. Call to Init() required")
 		return
@@ -50,6 +50,7 @@ func Start(keepAlive bool, refreshRate int, url string) {
 		//requestsMade++ //TODO Log request count
 		if keepAlive {
 			ticker.Reset(refreshInterval * time.Second)
+			fmt.Println("[INFO] Crawler will restart in", refreshRate, "seconds")
 		}
 	})
 
@@ -57,28 +58,18 @@ func Start(keepAlive bool, refreshRate int, url string) {
 		for {
 			select {
 			case <-ticker.C:
-				startCrawl(collector, url)
-				collector.Wait()
-
-				val, err := json.MarshalIndent(posts, "", "  ")
-				if err != nil {
-					log.Fatal(err.Error())
-					return
-				}
-				fmt.Println(string(val))
+				startAndLogCrawl(collector, url, fiName)
 			}
 		}
 	} else {
-		startCrawl(collector, url)
-		collector.Wait()
-
-		val, err := json.MarshalIndent(posts, "", "  ")
-		if err != nil {
-			log.Fatal(err.Error())
-			return
-		}
-		fmt.Println(string(val))
+		startAndLogCrawl(collector, url, fiName)
 	}
+}
+
+func startAndLogCrawl(c *colly.Collector, url, fiName string) {
+	startCrawl(collector, url)
+	collector.Wait()
+	go scrapLogger.LogToJson(posts, fiName)
 }
 
 func refineDomain(domain string) string {
@@ -97,7 +88,7 @@ func startCrawl(collector *colly.Collector, url string) {
 		post.Title = e.ChildText("a[data-event-action=title]")
 		post.Domain = refineDomain(e.ChildText("span[class=domain]")) //TODO Find a way to extract directly
 		post.Url = e.ChildAttr("a[data-event-action=title]", "href")
-		//post.comments = e.ChildAttr("a[data-event-action=comments]", "href")
+
 		selector := e.DOM.Find("p")
 		if selector.HasClass("tagline") {
 			selector.Children().Each(func(i int, selection *goquery.Selection) {
