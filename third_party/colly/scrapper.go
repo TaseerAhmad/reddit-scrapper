@@ -11,13 +11,13 @@ import (
 	"time"
 )
 
-var posts []models.Post //TODO TEMP
-
+var posts []models.Post
 var collector *colly.Collector
+var pageScrapCounter int
 
-func Init(domains ...string)  {
+func Init() {
 	collector = colly.NewCollector(
-		colly.AllowedDomains(domains...),
+		colly.AllowedDomains("old.reddit.com"),
 		colly.AllowURLRevisit(),
 		colly.Async(true))
 
@@ -30,46 +30,38 @@ func Init(domains ...string)  {
 		log.Fatal("[FATAL] Limit Error: ", err)
 		return
 	}
-
-	collector.OnRequest(func(request *colly.Request) {
-		fmt.Println("Visiting", request.URL.String())
-	})
 }
 
-// Start keepAlive when true makes the crawler to fetch the data after every defined intervals in refreshRate (seconds)
-func Start(keepAlive bool, refreshRate int, url ,fiName string) {
+func Start(pages int, url, fiName string) {
 	if collector == nil {
 		log.Fatal("[FATAL] Scrapper not initialized. Call to Init() required")
 		return
 	}
 
-	ticker := time.NewTicker(time.Second)
-	refreshInterval := time.Duration(refreshRate)
-
 	collector.OnRequest(func(request *colly.Request) {
-		//requestsMade++ //TODO Log request count
-		if keepAlive {
-			ticker.Reset(refreshInterval * time.Second)
-			fmt.Println("[INFO] Crawler will restart in", refreshRate, "seconds")
-		}
+		fmt.Println("Scrapping ", request.URL)
 	})
 
-	if keepAlive {
-		for {
-			select {
-			case <-ticker.C:
-				startAndLogCrawl(collector, url, fiName)
+	collector.OnScraped(func(r *colly.Response) {
+		fmt.Println("[SUCCESS] Scrapping done!")
+	})
+
+	collector.OnHTML("span.next-button", func(h *colly.HTMLElement) {
+		if pageScrapCounter != pages {
+			t := h.ChildAttr("a", "href")
+			err := collector.Visit(t)
+			if err != nil {
+				fmt.Println(err.Error())
+				return
 			}
 		}
-	} else {
-		startAndLogCrawl(collector, url, fiName)
-	}
-}
+		pageScrapCounter++
+	})
 
-func startAndLogCrawl(c *colly.Collector, url, fiName string) {
 	startCrawl(collector, url)
 	collector.Wait()
-	go scrapLogger.LogToJson(posts, fiName)
+
+	scrapLogger.LogToJson(posts, fiName)
 }
 
 func refineDomain(domain string) string {
@@ -77,7 +69,7 @@ func refineDomain(domain string) string {
 }
 
 func startCrawl(collector *colly.Collector, url string) {
-	err := collector.Visit(url) //TODO Pick the subreddits from user
+	err := collector.Visit(url)
 	if err != nil {
 		log.Fatal("[FATAL] Visit Error: ", err.Error())
 		return
@@ -86,7 +78,7 @@ func startCrawl(collector *colly.Collector, url string) {
 	collector.OnHTML(".top-matter", func(e *colly.HTMLElement) {
 		var post models.Post
 		post.Title = e.ChildText("a[data-event-action=title]")
-		post.Domain = refineDomain(e.ChildText("span[class=domain]")) //TODO Find a way to extract directly
+		post.Domain = refineDomain(e.ChildText("span[class=domain]"))
 		post.Url = e.ChildAttr("a[data-event-action=title]", "href")
 
 		selector := e.DOM.Find("p")

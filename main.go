@@ -8,26 +8,17 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 5 {
+	if len(os.Args) != 4 {
 		fmt.Println("Not enough arguments passed")
 		return
 	}
-	url := os.Args[3]
-	fiName := os.Args[4]
-	var keepAlive bool
-	var refreshRate int
-
-	if os.Args[1] == "true" {
-		keepAlive = true
-	}
-
-	rate, err := strconv.Atoi(os.Args[2])
+	pages := os.Args[1]
+	pagesToScrap, err := strconv.Atoi(pages)
 	if err != nil {
-		fmt.Println("Error inferring the value of refreshRate. Must be an integer. Passed value: ", os.Args[2])
+		fmt.Println(err.Error())
 		return
 	}
-	refreshRate = rate
 
-	scrapper.Init("old.reddit.com")
-	scrapper.Start(keepAlive, refreshRate, url, fiName)
+	scrapper.Init()
+	scrapper.Start(pagesToScrap, os.Args[2], os.Args[3])
 }

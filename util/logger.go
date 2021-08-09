@@ -3,8 +3,8 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
+
 	"os"
 	"reddit-scrapper/models"
 )
@@ -25,17 +25,7 @@ func LogToJson(posts []models.Post, fileName string) {
 	}
 	defer file.Close()
 
-	_, err = file.WriteString(string(jsonData))
-	if err != nil {
-		fmt.Println("Unable to save scrapped data. Error: ", err.Error())
-		return
-	}
-
-	err = ioutil.WriteFile(fileName, jsonData, 0755)
-	if err != nil {
-		log.Fatal(err.Error())
-		return
-	}
+	file.Write(jsonData)
 
 	fmt.Println("[SUCCESS] Write to", fileName, "completed")
 }
